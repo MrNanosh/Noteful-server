@@ -13,15 +13,15 @@ const morganOption =
   NODE_ENV === 'production'
     ? 'tiny'
     : 'common';
-const router = require('./service-routers/router');
+const folderRouter = require('./folder/folder-router');
+const noteRouter = require('./note/note-router');
 
 app.use(morgan(morganOption));
 app.use(helmet());
 app.use(cors());
 
-app.get('/', (req, res) => {
-  res.send('Hello, world!');
-});
+app.use('/api/folder', folderRouter);
+app.use('/api/note', noteRouter);
 
 app.use(function errorHandler(
   error,
@@ -43,7 +43,4 @@ app.use(function errorHandler(
   }
   res.status(500).json(response);
 });
-
-app.use('/service-routers', router);
-
 module.exports = app;

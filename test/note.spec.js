@@ -1,16 +1,14 @@
-const { expect } = require('chai');
 const knex = require('knex');
 const app = require('../src/app');
 const {
-  makeUsersArray
-} = require('./users.fixtures');
+  makeNotesArray
+} = require('./note.fixtures');
 const {
-  makeArticlesArray
-} = require('./articles.fixtures');
+  makeFoldersArray
+} = require('./folder.fixtures');
 
-describe('Articles Endpoints', function() {
+describe('Note Endpoints', function() {
   let db;
-
   before('make knex instance', () => {
     db = knex({
       client: 'pg',
@@ -23,106 +21,102 @@ describe('Articles Endpoints', function() {
   after('disconnect from db', () =>
     db.destroy()
   );
+
   before('clean the table', () =>
     db.raw(
-      'TRUNCATE blogful_articles, blogful_users, blogful_comments RESTART IDENTITY CASCADE'
+      'TRUNCATE note, folder RESTART IDENTITY CASCADE'
     )
   );
   afterEach('cleanup', () =>
     db.raw(
-      'TRUNCATE blogful_articles, blogful_users, blogful_comments RESTART IDENTITY CASCADE'
+      'TRUNCATE note, folder RESTART IDENTITY CASCADE'
     )
   );
-
-  describe('GET /api/articles', () => {
-    context('Given no articles', () => {
+  describe('GET /api/notes', () => {
+    context('Given no notes', () => {
       it('responds with 200 and an empty list', () => {
         return supertest(app)
-          .get('/api/articles')
+          .get('/api/note')
           .expect(200, []);
       });
     });
 
     context(
-      'Given there are articles in the database',
+      'Given there are notes in the database',
       () => {
-        const testUsers = makeUsersArray();
-        const testArticles = makeArticlesArray();
+        const testNotes = makeNotesArray();
+        const testFolders = makeFoldersArray();
 
         beforeEach(
-          'insert articles',
+          'insert notes',
           () => {
             return db
-              .into('blogful_users')
-              .insert(testUsers)
+              .into('folder')
+              .insert(testFolders)
               .then(() => {
                 return db
-                  .into(
-                    'blogful_articles'
-                  )
-                  .insert(testArticles);
+                  .into('note')
+                  .insert(testNotes);
               });
           }
         );
-        it('GET /api/articles responds with 200 and all of the articles', () => {
+
+        it('GET /api/note responds with 200 and all of the notes', () => {
           return supertest(app)
-            .get('/api/articles')
-            .expect(200, testArticles);
+            .get('/api/note')
+            .expect(200, testNotes);
         });
       }
     );
-
     context(
-      `Given an XSS attack article`,
+      `Given an XSS attack note`,
       () => {
-        const testUsers = makeUsersArray();
-        const maliciousArticle = {
+        const maliciousNote = {
           id: 911,
-          title:
+          note_name:
             'Naughty naughty very naughty <script>alert("xss");</script>',
-          style: 'How-to',
+          folder_id: 1,
           content:
             'Bad image <img src="https://url.to.file.which/does-not.exist" onerror="alert(document.cookie);">. But not <strong>all</strong> bad.'
         };
-        const expectedArticle = {
-          ...maliciousArticle,
-          title:
+        const expectedNote = {
+          ...maliciousNote,
+          note_name:
             'Naughty naughty very naughty &lt;script&gt;alert("xss");&lt;/script&gt;',
           content: `Bad image <img src="https://url.to.file.which/does-not.exist">. But not <strong>all</strong> bad.`
         };
 
+        const testFolders = makeFoldersArray();
         beforeEach(
-          'insert malicious article',
+          'insert malicious note',
           () => {
             return db
-              .into('blogful_users')
-              .insert(testUsers)
+              .into('folder')
+              .insert(testFolders)
               .then(() => {
                 return db
-                  .into(
-                    'blogful_articles'
-                  )
-                  .insert([
-                    maliciousArticle
-                  ]);
+                  .into('note')
+                  .insert(
+                    maliciousNote
+                  );
               });
           }
         );
 
         it('removes XSS attack content', () => {
           return supertest(app)
-            .get(`/api/articles`)
+            .get(`/api/note`)
             .expect(200)
             .expect(res => {
               expect(
-                res.body[0].title
+                res.body[0].note_name
               ).to.eql(
-                expectedArticle.title
+                expectedNote.note_name
               );
               expect(
                 res.body[0].content
               ).to.eql(
-                expectedArticle.content
+                expectedNote.content
               );
             });
         });
@@ -130,53 +124,48 @@ describe('Articles Endpoints', function() {
     );
   });
 
-  describe('GET /api/articles/:article_id', () => {
-    context('Given no articles', () => {
+  describe('GET /api/note/:note_id', () => {
+    context('Given no note', () => {
       it('responds with 404', () => {
-        const articleId = 123456;
+        const noteId = 123456;
         return supertest(app)
-          .get(
-            `/api/articles/${articleId}`
-          )
+          .get(`/api/note/${noteId}`)
           .expect(404, {
             error: {
               message:
-                "Article doesn't exist"
+                "note doesn't exist"
             }
           });
       });
     });
-
     context(
-      'Given there are articles in the database',
+      'Given there are notes in the database',
       () => {
         context(
-          'Given an XSS attack article',
+          'Given an XSS attack note',
           () => {
-            const testUsers = makeUsersArray();
-            const maliciousArticle = {
+            const testFolders = makeFoldersArray();
+            const maliciousNote = {
               id: 911,
-              title:
+              note_name:
                 'Naughty naughty very naughty <script>alert("xss");</script>',
-              style: 'How-to',
+              folder_id: 2,
               content:
                 'Bad image <img src="https://url.to.file.which/does-not.exist" onerror="alert(document.cookie);">. But not <strong>all</strong> bad.'
             };
 
             beforeEach(
-              'insert malicious article',
+              'insert malicious note',
               () => {
                 return db
-                  .into('blogful_users')
-                  .insert(testUsers)
+                  .into('folder')
+                  .insert(testFolders)
                   .then(() => {
                     return db
-                      .into(
-                        'blogful_articles'
-                      )
-                      .insert([
-                        maliciousArticle
-                      ]);
+                      .into('note')
+                      .insert(
+                        maliciousNote
+                      );
                   });
               }
             );
@@ -184,12 +173,12 @@ describe('Articles Endpoints', function() {
             it('removes XSS attack content', () => {
               return supertest(app)
                 .get(
-                  `/api/articles/${maliciousArticle.id}`
+                  `/api/note/${maliciousNote.id}`
                 )
                 .expect(200)
                 .expect(res => {
                   expect(
-                    res.body.title
+                    res.body.note_name
                   ).to.eql(
                     'Naughty naughty very naughty &lt;script&gt;alert("xss");&lt;/script&gt;'
                   );
@@ -203,89 +192,79 @@ describe('Articles Endpoints', function() {
           }
         );
 
-        const testUsers = makeUsersArray();
-        const testArticles = makeArticlesArray();
-
+        const testFolders = makeFoldersArray();
+        const testNotes = makeNotesArray();
         beforeEach(
-          'insert articles',
+          'insert notes',
           () => {
             return db
-              .into('blogful_users')
-              .insert(testUsers)
+              .into('folder')
+              .insert(testFolders)
               .then(() => {
                 return db
-                  .into(
-                    'blogful_articles'
-                  )
-                  .insert(testArticles);
+                  .into('note')
+                  .insert(testNotes);
               });
           }
         );
 
-        it('responds with 200 and the specified article', () => {
-          const articleId = 2;
-          const expectedArticle =
-            testArticles[articleId - 1];
+        it('responds with 200 and the specified note', () => {
+          const noteId = 2;
+          const expectedNote =
+            testNotes[noteId - 1];
+
           return supertest(app)
-            .get(
-              `/api/articles/${articleId}`
-            )
-            .expect(
-              200,
-              expectedArticle
-            );
+            .get(`/api/note/${noteId}`)
+            .expect(200, expectedNote);
         });
       }
     );
   });
 
-  describe('POST /api/articles', () => {
-    const testUsers = makeUsersArray();
-    beforeEach(
-      'insert malicious article',
-      () => {
-        return db
-          .into('blogful_users')
-          .insert(testUsers);
-      }
-    );
+  describe('POST /api/note', () => {
+    const testFolders = makeFoldersArray();
+    beforeEach('insert folders', () => {
+      return db
+        .into('folder')
+        .insert(testFolders);
+    });
 
-    it('creates an article, responding with 201 and the new article', function() {
+    it('creates an note, responding with 201 and the new note', function() {
       this.retries(3);
-      const newArticle = {
-        title: 'Test new article',
-        style: 'Listicle',
+      const newNote = {
+        note_name: 'Test new note',
+        folder_id: 2,
         content:
-          'Test new article content...'
+          'Test new note content...'
       };
       return supertest(app)
-        .post('/api/articles')
-        .send(newArticle)
+        .post('/api/note')
+        .send(newNote)
         .expect(201)
         .expect(res => {
-          expect(res.body.title).to.eql(
-            newArticle.title
-          );
-          expect(res.body.style).to.eql(
-            newArticle.style
-          );
+          expect(
+            res.body.note_name
+          ).to.eql(newNote.note_name);
+          expect(
+            res.body.folder_id
+          ).to.eql(newNote.folder_id);
           expect(
             res.body.content
-          ).to.eql(newArticle.content);
+          ).to.eql(newNote.content);
           expect(
             res.body
           ).to.have.property('id');
           expect(
             res.headers.location
           ).to.eql(
-            `/api/articles/${res.body.id}`
+            `/api/note/${res.body.id}`
           );
           const expected = new Date().toLocaleString(
             'en',
             { timeZone: 'UTC' }
           ); //solution changes these 2 consts
           const actual = new Date(
-            res.body.date_published
+            res.body.modified
           ).toLocaleString();
           expect(actual).to.eql(
             expected
@@ -294,32 +273,30 @@ describe('Articles Endpoints', function() {
         .then(postRes =>
           supertest(app)
             .get(
-              `/api/articles/${postRes.body.id}`
+              `/api/note/${postRes.body.id}`
             )
             .expect(postRes.body)
         );
     });
 
     const requiredFields = [
-      'title',
-      'style',
-      'content'
+      'note_name',
+      'folder_id'
     ];
 
     requiredFields.forEach(field => {
-      const newArticle = {
-        title: 'Test new article',
-        style: 'Listicle',
+      const newNote = {
+        note_name: 'Test new note',
+        folder_id: 2,
         content:
-          'Test new article content...'
+          'Test new note content...'
       };
 
       it(`responds with 400 and an error message when the '${field}' is missing`, () => {
-        delete newArticle[field];
-
+        delete newNote[field];
         return supertest(app)
-          .post('/api/articles')
-          .send(newArticle)
+          .post('/api/note')
+          .send(newNote)
           .expect(400, {
             error: {
               message: `Missing '${field}' in request body`
@@ -329,160 +306,152 @@ describe('Articles Endpoints', function() {
     });
 
     it('removes XSS attack content from response', () => {
-      const maliciousArticle = {
+      const maliciousNote = {
         id: 911,
-        title:
+        note_name:
           'Naughty naughty very naughty <script>alert("xss");</script>',
-        style: 'How-to',
+        folder_id: 1,
         content:
           'Bad image <img src="https://url.to.file.which/does-not.exist" onerror="alert(document.cookie);">. But not <strong>all</strong> bad.'
       };
-      const expectedArticle = {
-        ...maliciousArticle,
-        title:
+
+      const expectedNote = {
+        ...maliciousNote,
+        note_name:
           'Naughty naughty very naughty &lt;script&gt;alert("xss");&lt;/script&gt;',
         content: `Bad image <img src="https://url.to.file.which/does-not.exist">. But not <strong>all</strong> bad.`
       };
+
       return supertest(app)
-        .post('/api/articles')
-        .send(maliciousArticle)
+        .post('/api/note')
+        .send(maliciousNote)
         .expect(201)
         .expect(res => {
-          expect(res.body.title).to.eql(
-            expectedArticle.title
+          expect(
+            res.body.note_name
+          ).to.eql(
+            expectedNote.note_name
           );
           expect(
             res.body.content
           ).to.eql(
-            expectedArticle.content
+            expectedNote.content
           );
         });
     });
   });
 
-  describe(`DELETE /api/articles/:article_id`, () => {
-    context(`Given no articles`, () => {
+  describe(`DELETE /api/note/:note_id`, () => {
+    context(`Given no notes`, () => {
       it(`responds with 404`, () => {
-        const articleId = 123456;
+        const noteId = 123456;
         return supertest(app)
-          .delete(
-            `/api/articles/${articleId}`
-          )
+          .delete(`/api/note/${noteId}`)
           .expect(404, {
             error: {
-              message: `Article doesn't exist`
+              message: `note doesn't exist`
             }
           });
       });
     });
     context(
-      'Given there are articles in the database',
+      'Given there are notes in the database',
       () => {
-        const testArticles = makeArticlesArray();
-        const testUsers = makeUsersArray();
+        const testNotes = makeNotesArray();
+        const testFolders = makeFoldersArray();
         beforeEach(
-          'insert articles',
+          'insert notes',
           () => {
             return db
-              .into('blogful_users')
-              .insert(testUsers)
+              .into('folder')
+              .insert(testFolders)
               .then(() => {
                 return db
-                  .into(
-                    'blogful_articles'
-                  )
-                  .insert(testArticles);
+                  .into('note')
+                  .insert(testNotes);
               });
           }
         );
-
-        it('responds with 204 and removes the article', () => {
+        it('responds with 204 and removes the note', () => {
           const idToRemove = 2;
-          const expectedArticles = testArticles.filter(
-            article =>
-              article.id !== idToRemove
+          const expectedNotes = testNotes.filter(
+            note =>
+              note.id !== idToRemove
           );
           return supertest(app)
             .delete(
-              `/api/articles/${idToRemove}`
+              `/api/note/${idToRemove}`
             )
             .expect(204)
             .then(res =>
               supertest(app)
-                .get(`/api/articles`)
-                .expect(
-                  expectedArticles
-                )
+                .get(`/api/note`)
+                .expect(expectedNotes)
             );
         });
       }
     );
   });
 
-  describe(`PATCH /api/articles/:article_id`, () => {
-    context(`Given no articles`, () => {
+  describe(`PATCH /api/note/:note_id`, () => {
+    context(`Given no notes`, () => {
       it(`responds with 404`, () => {
-        const articleId = 123456;
+        const noteId = 123456;
         return supertest(app)
-          .patch(
-            `/api/articles/${articleId}`
-          )
+          .patch(`/api/note/${noteId}`)
           .expect(404, {
             error: {
-              message: `Article doesn't exist`
+              message: `note doesn't exist`
             }
           });
       });
     });
-
     context(
-      'Given there are articles in the database',
+      'Given there are notes in the database',
       () => {
-        const testArticles = makeArticlesArray();
-        const testUsers = makeUsersArray();
+        const testNotes = makeNotesArray();
+        const testFolders = makeFoldersArray();
         beforeEach(
-          'insert articles',
+          'insert notes',
           () => {
             return db
-              .into('blogful_users')
-              .insert(testUsers)
+              .into('folder')
+              .insert(testFolders)
               .then(() => {
                 return db
-                  .into(
-                    'blogful_articles'
-                  )
-                  .insert(testArticles);
+                  .into('note')
+                  .insert(testNotes);
               });
           }
         );
 
-        it('responds with 204 and updates the article', () => {
+        it('responds with 204 and updates the note', () => {
           const idToUpdate = 2;
-          const updateArticle = {
-            title:
-              'updated article title',
-            style: 'Interview',
+          const updateNote = {
+            note_name:
+              'updated note name',
+            folder_id: 2,
             content:
-              'updated article content'
+              'updated note content'
           };
-          const expectedArticle = {
-            ...testArticles[
+          const expectedNote = {
+            ...testNotes[
               idToUpdate - 1
             ],
-            ...updateArticle
+            ...updateNote
           };
           return supertest(app)
             .patch(
-              `/api/articles/${idToUpdate}`
+              `/api/note/${idToUpdate}`
             )
-            .send(updateArticle)
+            .send(updateNote)
             .expect(204)
             .then(res =>
               supertest(app)
                 .get(
-                  `/api/articles/${idToUpdate}`
+                  `/api/note/${idToUpdate}`
                 )
-                .expect(expectedArticle)
+                .expect(expectedNote)
             );
         });
 
@@ -490,37 +459,36 @@ describe('Articles Endpoints', function() {
           const idToUpdate = 2;
           return supertest(app)
             .patch(
-              `/api/articles/${idToUpdate}`
+              `/api/note/${idToUpdate}`
             )
             .send({
               irrelevantField: 'foo'
             })
             .expect(400, {
               error: {
-                message: `Request body must contain either 'title', 'style' or 'content'`
+                message: `Request body must contain either 'note_name', 'folder_id' or 'content'`
               }
             });
         });
-
         it(`responds with 204 when updating only a subset of fields`, () => {
           const idToUpdate = 2;
-          const updateArticle = {
-            title:
-              'updated article title'
+          const updateNote = {
+            note_name:
+              'updated note title'
           };
-          const expectedArticle = {
-            ...testArticles[
+          const expectedNote = {
+            ...testNotes[
               idToUpdate - 1
             ],
-            ...updateArticle
+            ...updateNote
           };
 
           return supertest(app)
             .patch(
-              `/api/articles/${idToUpdate}`
+              `/api/note/${idToUpdate}`
             )
             .send({
-              ...updateArticle,
+              ...updateNote,
               fieldToIgnore:
                 'should not be in GET response'
             })
@@ -528,9 +496,9 @@ describe('Articles Endpoints', function() {
             .then(res =>
               supertest(app)
                 .get(
-                  `/api/articles/${idToUpdate}`
+                  `/api/note/${idToUpdate}`
                 )
-                .expect(expectedArticle)
+                .expect(expectedNote)
             );
         });
       }
